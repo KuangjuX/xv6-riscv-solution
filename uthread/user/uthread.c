@@ -91,14 +91,10 @@ thread_schedule(void)
 
   if (current_thread != next_thread) {         /* switch threads?  */
     // 找到下一个调度的线程并执行上下文切换
-    // thread_dump();
     next_thread->state = RUNNING;
     t = current_thread;
     current_thread = next_thread;
-    /* YOUR CODE HERE
-     * Invoke thread_switch to switch from t to next_thread:
-     * thread_switch(??, ??);
-     */
+    // 进行上下文切换
     thread_switch((uint64)&t->context, (uint64)&current_thread->context);
   } else{
     next_thread = 0;
@@ -118,7 +114,6 @@ thread_create(void (*func)())
   name++;
   // 将线程状态设置为可运行
   t->state = RUNNABLE;
-  // YOUR CODE HERE
   // 将上下文的函数返回值设置为函数指针的地址
   t->context.ra = (uint64)func;
   // 设置上下文的栈地址
