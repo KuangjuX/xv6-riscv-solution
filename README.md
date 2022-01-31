@@ -1,5 +1,5 @@
 # xv6-riscv-solution
-MIT 6.S081 xvr-riscv solution
+MIT 6.S081 xv6-riscv solution
 
 ## Solutions
 - [x] Lazy Page Allocation
