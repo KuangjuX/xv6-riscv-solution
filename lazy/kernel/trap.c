@@ -93,7 +93,6 @@ usertrap(void)
             (uint64)page,
             PTE_W|PTE_X|PTE_R|PTE_U
           ) != 0){
-            // printf("[Kernel] trap: pa: %p\n", (uint64)page);
             kfree(page);
             uvmdealloc(pgt, err_addr, new_addr);
           }
