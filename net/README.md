@@ -93,7 +93,20 @@ e1000_recv(void)
 
 }
 ```  
-这里要注意在从网卡接收 pakcet 的时候必须从 `E1000_RDT` 的位置开始遍历并向上层进行分发直到遇到未被使用的位置，因为网卡并非是收到 pakcet 立刻向操作系统发起中断，而是使用 `NAPI` 机制，对 IRQ 做合并以减少中断次数，`NAPI` 机制让 NIC 的 driver 能够注册一个 `poll` 函数，之后 `NAPI` 的子系统可以通过 `poll` 函数从 ring buffer 批量获取数据，最终发起中断。而本次实验使用的是 qemu 模拟的 e1000 网卡也使用了 `NAPI` 机制。
+这里要注意在从网卡接收 pakcet 的时候必须从 `E1000_RDT` 的位置开始遍历并向上层进行分发直到遇到未被使用的位置，因为网卡并非是收到 pakcet 立刻向操作系统发起中断，而是使用 `NAPI` 机制，对 IRQ 做合并以减少中断次数，`NAPI` 机制让 NIC 的 driver 能够注册一个 `poll` 函数，之后 `NAPI` 的子系统可以通过 `poll` 函数从 ring buffer 批量获取数据，最终发起中断。`NAPI` 的处理流程如下所示:  
+  
+
+1. NIC driver 初始化时向 Kernel 注册 `poll` 函数，用于后续从 Ring Buffer 拉取收到的数据
+2. driver 注册开启 NAPI，这个机制默认是关闭的，只有支持 NAPI 的 driver 才会去开启
+3. 收到数据后 NIC 通过 DMA 将数据存到内存
+4. NIC 触发一个 IRQ，并触发 CPU 开始执行 driver 注册的 Interrupt Handler
+5. driver 的 Interrupt Handler 通过 [napi_schedule](http://elixir.free-electrons.com/linux/v4.4/source/include/linux/netdevice.h#L421) 函数触发 softirq ([NET_RX_SOFTIRQ](http://elixir.free-electrons.com/linux/v4.4/source/net/core/dev.c#L3204)) 来唤醒 NAPI subsystem，NET_RX_SOFTIRQ 的 handler 是 [net_rx_action 会在另一个线程中被执行，在其中会调用 driver 注册的 `poll` 函数获取收到的 Packet](http://elixir.free-electrons.com/linux/v4.4/source/net/core/dev.c#L4861)
+6. driver 会禁用当前 NIC 的 IRQ，从而能在 `poll` 完所有数据之前不会再有新的 IRQ
+7. 当所有事情做完之后，NAPI subsystem 会被禁用，并且会重新启用 NIC 的 IRQ
+8. 回到第三步  
+  
+
+而本次实验使用的是 qemu 模拟的 e1000 网卡也使用了 `NAPI` 机制。
   
 ## socket 实现  
   

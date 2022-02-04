@@ -29,17 +29,11 @@ static struct sock *sockets;
 void sock_dump(){
   printf("-------------------------\n");
   struct sock* sock;
-  // if(!holding(&lock)){
-  //   acquire(&lock);
-  // }
   sock = sockets;
   while(sock != 0){
     printf("raddr: %d, lport: %d, rport: %d\n", sock->raddr, sock->lport, sock->rport);
     sock = sock->next;
   }
-  // if(holding(&lock)){
-  //   release(&lock);
-  // }
   printf("-------------------------\n");
 }
 
