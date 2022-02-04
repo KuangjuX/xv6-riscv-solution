@@ -113,13 +113,13 @@ e1000_transmit(struct mbuf *m)
   // the TX descriptor ring so that the e1000 sends it. Stash
   // a pointer so that it can be freed after sending.
   //
-  // return -1;
-  
   // 获取 ring position
+  acquire(&e1000_lock);
   uint64 tdt = regs[E1000_TDT];
   uint64 index = tdt % TX_RING_SIZE;
   struct tx_desc send_desc = tx_ring[index];
   if(!(send_desc.status & E1000_TXD_STAT_DD)) {
+    release(&e1000_lock);
     return -1;
   }
   if(tx_mbufs[index] != 0){
@@ -129,12 +129,13 @@ e1000_transmit(struct mbuf *m)
   tx_mbufs[index] = m;
   tx_ring[index].addr = (uint64)tx_mbufs[index]->head;
   tx_ring[index].length = (uint16)tx_mbufs[index]->len;
-  tx_ring[index].cmd = (1 << 3) | (1 << 1) | (1 << 0);
+  tx_ring[index].cmd = E1000_TXD_CMD_RS | E1000_TXD_CMD_EOP;
   tx_ring[index].status = 0;
 
   tdt = (tdt + 1) % TX_RING_SIZE;
   regs[E1000_TDT] = tdt;
   __sync_synchronize();
+  release(&e1000_lock);
   return 0;
 }
 
@@ -147,31 +148,33 @@ e1000_recv(void)
   // Check for packets that have arrived from the e1000
   // Create and deliver an mbuf for each packet (using net_rx()).
   //
-  // 扫描 RX queue 处理收到每个收到的 pakcet
-  // 对于每个 pakcet 都创建和分发 mbuf，调用 net_rx()
-  // 将其传输到协议层
   
   // 获取接收 packet 的位置
   uint64 rdt = regs[E1000_RDT];
-  uint64 rdh = regs[E1000_RDH];
   uint64 index = (rdt + 1) % RX_RING_SIZE; 
-  struct rx_desc recv_desc = rx_ring[index];
-  if(!(recv_desc.status & E1000_RXD_STAT_DD)){
+  // struct rx_desc recv_desc = rx_ring[index];
+  if(!(rx_ring[index].status & E1000_RXD_STAT_DD)){
     // 查看新的 packet 是否有 E1000_RXD_STAT_DD 标志，如果
     // 没有，则直接返回
     return;
   }
-  printf("[Kernel] rdt: %d, rdh: %d\n", rdt, rdh);
-  // 使用 mbufput 更新长度并将其交给 net_rx() 处理
-  mbufput(rx_mbufs[index], recv_desc.length);
-  net_rx(rx_mbufs[index]);
-  // 分配新的 mbuf 并将其写入到描述符中并将状态吗设置成 0
-  rx_mbufs[index] = mbufalloc(0);
-  rx_ring[index].addr = (uint64)rx_mbufs[index]->head;
-  rx_ring[index].status = 0;
+  while(rx_ring[index].status & E1000_RXD_STAT_DD){
+    // acquire(&e1000_lock);
+    // 使用 mbufput 更新长度并将其交给 net_rx() 处理
+    struct mbuf* buf = rx_mbufs[index];
+    mbufput(buf, rx_ring[index].length);
+    // 分配新的 mbuf 并将其写入到描述符中并将状态吗设置成 0
+    rx_mbufs[index] = mbufalloc(0);
+    rx_ring[index].addr = (uint64)rx_mbufs[index]->head;
+    rx_ring[index].status = 0;
+    rdt = index;
+    regs[E1000_RDT] = rdt;
+    __sync_synchronize();
+    release(&e1000_lock);
+    net_rx(buf);
+    index = (regs[E1000_RDT] + 1) % RX_RING_SIZE;
+  }
 
-  rdt = index;
-  regs[E1000_RDT] = rdt;
 }
 
 // 当 e1000 网卡收到数据时会发生中断
