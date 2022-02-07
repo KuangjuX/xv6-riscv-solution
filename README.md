@@ -6,3 +6,4 @@ MIT 6.S081 xv6-riscv solution
 - [x] Copy-on-Write Fork 
 - [x] User Level Threads
 - [x] Networking
+- [ ] mmap
